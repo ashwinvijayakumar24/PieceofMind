@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle, Info, Loader2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, CheckCircle, Info, Loader2, Plus, Search } from "lucide-react";
 import { Patient, Interaction, InteractionSummary } from "@/types";
 import { apiService } from "@/services/api";
 import { Header } from "@/components/Header";
@@ -10,15 +10,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
 const Dashboard = () => {
+  console.log('🎯 Dashboard component rendering...');
+  console.log('🎯 Current window location:', window.location.href);
+  console.log('🎯 Available environment variables:', {
+    NODE_ENV: import.meta.env.NODE_ENV,
+    VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+    VITE_ML_BASE_URL: import.meta.env.VITE_ML_BASE_URL,
+  });
+
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [isCheckingInteractions, setIsCheckingInteractions] = useState(false);
   const [interactionResults, setInteractionResults] = useState<{
     interactions: Interaction[];
     summary: InteractionSummary;
   } | null>(null);
+
+  // Drug addition states
+  const [drugSearchQuery, setDrugSearchQuery] = useState('');
+  const [drugSuggestions, setDrugSuggestions] = useState<any[]>([]);
+  const [isSearchingDrugs, setIsSearchingDrugs] = useState(false);
+  const [isAddingDrug, setIsAddingDrug] = useState(false);
+  const [addDrugResults, setAddDrugResults] = useState<any>(null);
+
+  const queryClient = useQueryClient();
 
   // Fetch patients
   const {
@@ -27,15 +45,47 @@ const Dashboard = () => {
     error: patientsError
   } = useQuery({
     queryKey: ['patients'],
-    queryFn: apiService.getPatients,
-    retry: 2
+    queryFn: async () => {
+      console.log('🏥 Starting patients query...');
+      try {
+        const result = await apiService.getPatients();
+        console.log('🏥 Patients query successful:', result);
+        return result;
+      } catch (error) {
+        console.error('🏥 Patients query failed:', error);
+        throw error;
+      }
+    },
+    retry: 2,
+    onError: (error) => {
+      console.error('🏥 Patients query onError callback:', error);
+    },
+    onSuccess: (data) => {
+      console.log('🏥 Patients query onSuccess callback:', data);
+    }
   });
 
   // Health check
-  const { data: healthData } = useQuery({
+  const { data: healthData, error: healthError } = useQuery({
     queryKey: ['health'],
-    queryFn: apiService.healthCheck,
-    refetchInterval: 30000 // Check every 30 seconds
+    queryFn: async () => {
+      console.log('❤️ Starting health check query...');
+      try {
+        const result = await apiService.healthCheck();
+        console.log('❤️ Health check successful:', result);
+        return result;
+      } catch (error) {
+        console.error('❤️ Health check failed:', error);
+        throw error;
+      }
+    },
+    refetchInterval: 30000, // Check every 30 seconds
+    onError: (error) => {
+      console.error('❤️ Health check onError callback:', error);
+    },
+    onSuccess: (data) => {
+      console.log('❤️ Health check onSuccess callback:', data);
+    }
   });
 
   // Check interactions mutation
@@ -58,6 +108,59 @@ const Dashboard = () => {
     const patient = patientsData?.patients.find(p => p.id === patientId);
     setSelectedPatient(patient || null);
     setInteractionResults(null); // Clear previous results
+    setAddDrugResults(null); // Clear drug addition results
+  };
+
+  // Drug search functionality
+  const handleDrugSearch = async (query: string) => {
+    if (query.length < 2) {
+      setDrugSuggestions([]);
+      return;
+    }
+
+    setIsSearchingDrugs(true);
+    try {
+      const result = await apiService.searchDrugs(query);
+      setDrugSuggestions(result.suggestions || []);
+    } catch (error) {
+      console.error('Drug search failed:', error);
+      toast.error('Failed to search drugs');
+      setDrugSuggestions([]);
+    } finally {
+      setIsSearchingDrugs(false);
+    }
+  };
+
+  // Add drug to patient
+  const handleAddDrug = async (drugName: string, rxcui?: string) => {
+    if (!selectedPatient) {
+      toast.error('Please select a patient first');
+      return;
+    }
+
+    setIsAddingDrug(true);
+    try {
+      const result = await apiService.addDrugToPatient(selectedPatient.id, drugName, rxcui);
+      setAddDrugResults(result);
+
+      // Update the selected patient with new medication list
+      setSelectedPatient(result.patient);
+
+      // Refresh patients data
+      queryClient.invalidateQueries(['patients']);
+
+      toast.success(`${drugName} added successfully`);
+
+      // Clear search
+      setDrugSearchQuery('');
+      setDrugSuggestions([]);
+
+    } catch (error) {
+      console.error('Failed to add drug:', error);
+      toast.error('Failed to add drug to patient');
+    } finally {
+      setIsAddingDrug(false);
+    }
   };
 
   const handleCheckInteractions = async () => {
@@ -99,7 +202,16 @@ const Dashboard = () => {
     }
   };
 
+  console.log('🎯 Dashboard state check:', {
+    patientsLoading,
+    patientsError: patientsError?.message || patientsError,
+    patientsData,
+    healthError: healthError?.message || healthError,
+    healthData
+  });
+
   if (patientsError) {
+    console.error('🎯 Showing patients error UI due to:', patientsError);
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -108,6 +220,8 @@ const Dashboard = () => {
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               Failed to connect to the backend service. Please ensure the API server is running.
+              <br />
+              <strong>Debug Info:</strong> {String(patientsError)}
             </AlertDescription>
           </Alert>
         </div>
@@ -196,6 +310,57 @@ const Dashboard = () => {
                       </div>
                     </div>
 
+                    <Separator />
+
+                    <div>
+                      <h4 className="font-medium flex items-center gap-2">
+                        <Plus className="h-4 w-4" />
+                        Add New Medication
+                      </h4>
+                      <div className="space-y-3 mt-2">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                          <Input
+                            placeholder="Search for medication..."
+                            value={drugSearchQuery}
+                            onChange={(e) => {
+                              setDrugSearchQuery(e.target.value);
+                              handleDrugSearch(e.target.value);
+                            }}
+                            className="pl-10"
+                          />
+                          {isSearchingDrugs && (
+                            <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin" />
+                          )}
+                        </div>
+
+                        {drugSuggestions.length > 0 && (
+                          <div className="max-h-48 overflow-y-auto border rounded-md bg-white">
+                            {drugSuggestions.map((drug, index) => (
+                              <div
+                                key={index}
+                                className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                                onClick={() => handleAddDrug(drug.name, drug.rxcui)}
+                              >
+                                <div className="font-medium">{drug.name}</div>
+                                <div className="text-sm text-gray-500">RxCUI: {drug.rxcui}</div>
+                                {drug.score && (
+                                  <div className="text-xs text-gray-400">Match: {drug.score}</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {isAddingDrug && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Adding medication and checking interactions...
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     <Button
                       onClick={handleCheckInteractions}
                       disabled={isCheckingInteractions || selectedPatient.medications.length < 2}
@@ -224,7 +389,120 @@ const Dashboard = () => {
 
           {/* Results */}
           <div className="lg:col-span-2">
-            {interactionResults ? (
+            {addDrugResults ? (
+              <div className="space-y-6">
+                {/* Drug Addition Summary */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Plus className="h-5 w-5" />
+                      Drug Added: {addDrugResults.summary?.newDrug}
+                    </CardTitle>
+                    <CardDescription>
+                      Interaction analysis for newly added medication
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600">
+                          ✓
+                        </div>
+                        <div className="text-sm text-gray-600">Added Successfully</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {addDrugResults.summary?.totalChecks || 0}
+                        </div>
+                        <div className="text-sm text-gray-600">Interactions Checked</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-red-600">
+                          {addDrugResults.summary?.interactionsFound || 0}
+                        </div>
+                        <div className="text-sm text-gray-600">Risks Found</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Interaction Results for New Drug */}
+                {addDrugResults.interactionResults?.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Interaction Analysis</CardTitle>
+                      <CardDescription>
+                        Potential interactions with {addDrugResults.summary?.newDrug}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {addDrugResults.interactionResults.map((interaction: any, index: number) => (
+                          <div
+                            key={index}
+                            className={`p-4 rounded-lg border ${getSeverityColor(interaction.severity)}`}
+                          >
+                            <div className="flex items-start gap-3">
+                              {getSeverityIcon(interaction.severity)}
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <h4 className="font-medium">
+                                    {interaction.existingDrug} + {interaction.newDrug}
+                                  </h4>
+                                  <Badge
+                                    variant="outline"
+                                    className={getSeverityColor(interaction.severity)}
+                                  >
+                                    {interaction.severity?.toUpperCase() || 'UNKNOWN'}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    {interaction.method || 'enhanced_ai'}
+                                  </Badge>
+                                </div>
+
+                                <p className="text-sm mb-2">{interaction.description}</p>
+
+                                <div className="text-sm">
+                                  <strong>Recommendation:</strong> {interaction.recommendation}
+                                </div>
+
+                                {interaction.riskFactors && interaction.riskFactors.length > 0 && (
+                                  <div className="text-xs text-gray-600 mt-2">
+                                    <strong>Risk Factors:</strong> {interaction.riskFactors.join(', ')}
+                                  </div>
+                                )}
+
+                                {interaction.monitoringAdvice && (
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    <strong>Monitoring:</strong> {interaction.monitoringAdvice}
+                                  </div>
+                                )}
+
+                                {interaction.confidence && (
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    <strong>Confidence:</strong> {(interaction.confidence * 100).toFixed(1)}%
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Clear Results Button */}
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => setAddDrugResults(null)}
+                  >
+                    Clear Results
+                  </Button>
+                </div>
+              </div>
+            ) : interactionResults ? (
               <div className="space-y-6">
                 {/* Summary */}
                 <Card>

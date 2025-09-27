@@ -48,10 +48,54 @@ class ApiService {
 
   constructor() {
     this.baseUrl = API_BASE_URL;
+    console.log('🔗 ApiService initialized with baseUrl:', this.baseUrl);
+    console.log('🔗 Environment variables:', {
+      VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+      VITE_ML_BASE_URL: import.meta.env.VITE_ML_BASE_URL,
+    });
+
+    // Test basic connectivity
+    this.testConnectivity();
+  }
+
+  private async testConnectivity() {
+    console.log('🧪 Testing API connectivity...');
+    try {
+      const testUrl = `${this.baseUrl}/api/health`;
+      console.log('🧪 Testing URL:', testUrl);
+
+      const response = await fetch(testUrl, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      console.log('🧪 Connectivity test result:', {
+        url: testUrl,
+        status: response.status,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🧪 Connectivity test successful:', data);
+      } else {
+        console.error('🧪 Connectivity test failed - response not ok');
+      }
+    } catch (error) {
+      console.error('🧪 Connectivity test failed with exception:', error);
+    }
   }
 
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+
+    console.log('🚀 Making API request:', {
+      method: options?.method || 'GET',
+      url,
+      headers: options?.headers,
+      body: options?.body,
+    });
 
     try {
       const response = await fetch(url, {
@@ -62,14 +106,39 @@ class ApiService {
         ...options,
       });
 
+      console.log('📡 API response received:', {
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries()),
+      });
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('❌ API request failed - Response not OK:', {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+        });
         throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      console.log('✅ API request successful:', {
+        url,
+        dataKeys: Object.keys(data),
+        dataPreview: JSON.stringify(data).substring(0, 200) + '...',
+      });
+
+      return data;
     } catch (error) {
-      console.error(`API request failed for ${endpoint}:`, error);
+      console.error('💥 API request failed with exception:', {
+        url,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       throw error;
     }
   }
@@ -111,6 +180,31 @@ class ApiService {
       body: JSON.stringify({
         medications,
         patientId,
+      }),
+    });
+  }
+
+  // Search for drugs using RxNorm API
+  async searchDrugs(query: string): Promise<{ suggestions: any[] }> {
+    return this.request(`/api/drugs/search/${encodeURIComponent(query)}`);
+  }
+
+  // Get detailed drug information
+  async getDrugDetails(rxcui: string): Promise<{ drug: any; adverseEvents: any[] }> {
+    return this.request(`/api/drugs/details/${rxcui}`);
+  }
+
+  // Add drug to patient and check for interactions
+  async addDrugToPatient(
+    patientId: string,
+    drugName: string,
+    rxcui?: string
+  ): Promise<{ patient: Patient; interactionResults: any[]; summary: any }> {
+    return this.request(`/api/patients/${patientId}/drugs`, {
+      method: 'POST',
+      body: JSON.stringify({
+        drugName,
+        rxcui,
       }),
     });
   }

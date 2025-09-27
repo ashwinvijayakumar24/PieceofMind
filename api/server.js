@@ -32,13 +32,41 @@ const checkInteractionsSchema = Joi.object({
 });
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  let mlServiceHealthy = false;
+  let mlServiceDetails = {
+    sentence_transformers: false,
+    openai: false
+  };
+
+  // Test ML service connection and get detailed status
+  try {
+    const mlServiceUrl = process.env.ML_BASE || 'http://localhost:8000';
+    const mlResponse = await fetch(`${mlServiceUrl}/health`, { timeout: 2000 });
+
+    if (mlResponse.ok) {
+      mlServiceHealthy = true;
+      const mlData = await mlResponse.json();
+
+      // Extract detailed service status from ML service
+      if (mlData.services) {
+        mlServiceDetails.sentence_transformers = mlData.services.sentence_transformers || false;
+        mlServiceDetails.openai = mlData.services.openai || false;
+      }
+    }
+  } catch (error) {
+    console.log('ML service health check failed:', error.message);
+    mlServiceHealthy = false;
+  }
+
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     services: {
       supabase: !!process.env.SUPABASE_URL,
-      ml_service: !!process.env.ML_BASE
+      ml_service: mlServiceHealthy,
+      sentence_transformers: mlServiceDetails.sentence_transformers,
+      openai: mlServiceDetails.openai
     }
   });
 });
@@ -114,6 +142,187 @@ app.get('/api/drugs', async (req, res) => {
   } catch (error) {
     console.error('Error fetching drugs:', error);
     res.status(500).json({ error: 'Failed to fetch drugs' });
+  }
+});
+
+// Search drugs using RxNorm API
+app.get('/api/drugs/search/:query', async (req, res) => {
+  try {
+    const { query } = req.params;
+
+    // Call RxNorm API to search for drugs
+    const rxnormUrl = `https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=${encodeURIComponent(query)}&maxEntries=10`;
+    const rxnormResponse = await fetch(rxnormUrl);
+
+    if (!rxnormResponse.ok) {
+      throw new Error('RxNorm API request failed');
+    }
+
+    const rxnormData = await rxnormResponse.json();
+    const suggestions = rxnormData.approximateGroup?.candidate || [];
+
+    res.json({
+      suggestions: suggestions.map(drug => ({
+        rxcui: drug.rxcui,
+        name: drug.name,
+        score: drug.score
+      }))
+    });
+  } catch (error) {
+    console.error('Error searching drugs:', error);
+    res.status(500).json({ error: 'Failed to search drugs' });
+  }
+});
+
+// Get detailed drug information from RxNorm
+app.get('/api/drugs/details/:rxcui', async (req, res) => {
+  try {
+    const { rxcui } = req.params;
+
+    // Get drug properties from RxNorm
+    const propertiesUrl = `https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/properties.json`;
+    const propertiesResponse = await fetch(propertiesUrl);
+
+    let drugInfo = { rxcui, name: 'Unknown Drug' };
+
+    if (propertiesResponse.ok) {
+      const propertiesData = await propertiesResponse.json();
+      if (propertiesData.properties) {
+        drugInfo = {
+          rxcui: propertiesData.properties.rxcui,
+          name: propertiesData.properties.name,
+          synonym: propertiesData.properties.synonym,
+          tty: propertiesData.properties.tty
+        };
+      }
+    }
+
+    // Try to get adverse events from OpenFDA (optional)
+    let adverseEvents = [];
+    try {
+      const fdaUrl = `https://api.fda.gov/drug/event.json?search=patient.drug.medicinalproduct:"${encodeURIComponent(drugInfo.name)}"&limit=10`;
+      const fdaResponse = await fetch(fdaUrl);
+
+      if (fdaResponse.ok) {
+        const fdaData = await fdaResponse.json();
+        if (fdaData.results) {
+          adverseEvents = fdaData.results.slice(0, 5).map(event => ({
+            reactions: event.patient?.reaction?.map(r => r.reactionmeddrapt) || [],
+            reportdate: event.reportdate
+          }));
+        }
+      }
+    } catch (fdaError) {
+      console.log('OpenFDA request failed, continuing without adverse events data:', fdaError.message);
+    }
+
+    res.json({
+      drug: drugInfo,
+      adverseEvents: adverseEvents
+    });
+  } catch (error) {
+    console.error('Error getting drug details:', error);
+    res.status(500).json({ error: 'Failed to get drug details' });
+  }
+});
+
+// Add drug to patient
+app.post('/api/patients/:id/drugs', async (req, res) => {
+  try {
+    const { id: patientId } = req.params;
+    const { drugName, rxcui } = req.body;
+
+    if (!drugName) {
+      return res.status(400).json({ error: 'Drug name is required' });
+    }
+
+    // Get current patient data
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('*')
+      .eq('id', patientId)
+      .single();
+
+    if (patientError || !patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    // Add new drug to medications array
+    const updatedMedications = [...(patient.medications || []), drugName];
+
+    // Update patient in database
+    const { data: updatedPatient, error: updateError } = await supabase
+      .from('patients')
+      .update({
+        medications: updatedMedications,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', patientId)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    // Check for interactions with new drug
+    const interactionCheckUrl = process.env.ML_BASE || 'http://localhost:8000';
+    let interactionResults = [];
+
+    // Check new drug against each existing medication
+    for (const existingMed of patient.medications || []) {
+      try {
+        const mlResponse = await fetch(`${interactionCheckUrl}/interactions/check-enhanced`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            drugA: existingMed,
+            drugB: drugName,
+            patientContext: {
+              age: patient.age,
+              conditions: patient.conditions || [],
+              allMedications: updatedMedications
+            }
+          }),
+          timeout: 10000
+        });
+
+        if (mlResponse.ok) {
+          const mlResult = await mlResponse.json();
+          interactionResults.push({
+            existingDrug: existingMed,
+            newDrug: drugName,
+            ...mlResult
+          });
+        }
+      } catch (mlError) {
+        console.log(`ML service error for ${existingMed} + ${drugName}:`, mlError.message);
+        // Fallback to basic analysis
+        interactionResults.push({
+          existingDrug: existingMed,
+          newDrug: drugName,
+          severity: 'unknown',
+          description: `Interaction check unavailable for ${existingMed} + ${drugName}`,
+          recommendation: 'Manual review recommended',
+          method: 'fallback'
+        });
+      }
+    }
+
+    res.json({
+      patient: updatedPatient,
+      interactionResults: interactionResults,
+      summary: {
+        newDrug: drugName,
+        addedSuccessfully: true,
+        interactionsFound: interactionResults.filter(r => r.severity !== 'mild').length,
+        totalChecks: interactionResults.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error adding drug to patient:', error);
+    res.status(500).json({ error: 'Failed to add drug to patient' });
   }
 });
 

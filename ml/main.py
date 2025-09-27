@@ -69,6 +69,11 @@ class InteractionRequest(BaseModel):
     drugA: str = Field(..., description="First drug name")
     drugB: str = Field(..., description="Second drug name")
 
+class EnhancedInteractionRequest(BaseModel):
+    drugA: str = Field(..., description="First drug name")
+    drugB: str = Field(..., description="Second drug name")
+    patientContext: Dict = Field(default={}, description="Patient context (age, conditions, all medications)")
+
 class InteractionResponse(BaseModel):
     severity: str = Field(..., description="Interaction severity: mild, moderate, severe")
     description: str = Field(..., description="Detailed description of the interaction")
@@ -242,7 +247,19 @@ Respond in JSON format:
         )
 
         # Parse response
-        ai_response = json.loads(response.choices[0].message.content)
+        response_content = response.choices[0].message.content
+
+        # Remove markdown code block formatting if present
+        clean_content = response_content.strip()
+        if clean_content.startswith('```json'):
+            clean_content = clean_content[7:]  # Remove ```json
+        if clean_content.startswith('```'):
+            clean_content = clean_content[3:]   # Remove ```
+        if clean_content.endswith('```'):
+            clean_content = clean_content[:-3]  # Remove closing ```
+        clean_content = clean_content.strip()
+
+        ai_response = json.loads(clean_content)
         return {
             'severity': ai_response.get('severity', 'mild'),
             'description': ai_response.get('description', 'AI-generated interaction assessment'),
@@ -255,6 +272,119 @@ Respond in JSON format:
     except Exception as e:
         logger.error(f"Error with OpenAI API: {e}")
         return generate_rule_based_explanation(drug_a, drug_b, similarity_score)
+
+def generate_enhanced_ai_explanation(drug_a: str, drug_b: str, patient_context: Dict) -> Dict:
+    """Generate enhanced AI-powered explanation with patient context using OpenAI"""
+    if not OPENAI_AVAILABLE or not os.getenv('OPENAI_API_KEY'):
+        return generate_rule_based_explanation(drug_a, drug_b, 0.5)
+
+    try:
+        # Get drug information for context
+        drug_a_info = drug_data.get(drug_a.lower(), {})
+        drug_b_info = drug_data.get(drug_b.lower(), {})
+
+        # Extract patient context
+        age = patient_context.get('age', 'Unknown')
+        conditions = patient_context.get('conditions', [])
+        all_medications = patient_context.get('allMedications', [])
+
+        # Prepare comprehensive context
+        context = f"""
+        DRUG INTERACTION ANALYSIS REQUEST:
+
+        Primary Drugs Being Evaluated:
+        - Drug A: {drug_a}
+          * Class: {drug_a_info.get('drug_class', 'Unknown')}
+          * Mechanism: {drug_a_info.get('mechanism', 'Unknown')}
+          * Known Interactions: {drug_a_info.get('interactions_profile', 'Unknown')}
+
+        - Drug B: {drug_b}
+          * Class: {drug_b_info.get('drug_class', 'Unknown')}
+          * Mechanism: {drug_b_info.get('mechanism', 'Unknown')}
+          * Known Interactions: {drug_b_info.get('interactions_profile', 'Unknown')}
+
+        PATIENT CONTEXT:
+        - Age: {age}
+        - Medical Conditions: {', '.join(conditions) if conditions else 'None reported'}
+        - Complete Medication List: {', '.join(all_medications) if all_medications else 'None'}
+
+        CLINICAL CONSIDERATIONS:
+        - Age-related pharmacokinetic changes
+        - Comorbidity impact on drug metabolism
+        - Polypharmacy interactions
+        """
+
+        # Create enhanced OpenAI prompt
+        prompt = f"""You are a clinical pharmacologist conducting a comprehensive drug-drug interaction analysis.
+
+{context}
+
+Please provide a thorough assessment of the interaction between {drug_a} and {drug_b} in the context of this specific patient.
+
+Consider:
+1. Direct pharmacological interactions between the two drugs
+2. Patient's age and its impact on drug metabolism
+3. How the patient's medical conditions might affect the interaction
+4. Potential for the interaction to worsen existing conditions
+5. Overall risk assessment given the complete medication regimen
+
+Provide a detailed clinical assessment in JSON format:
+{{
+    "severity": "mild|moderate|severe",
+    "description": "detailed description of the interaction mechanism and clinical significance",
+    "recommendation": "specific clinical recommendation including monitoring parameters",
+    "riskFactors": ["list", "of", "specific", "risk", "factors"],
+    "monitoringAdvice": "specific monitoring recommendations",
+    "patientSpecificConcerns": "concerns specific to this patient's profile"
+}}"""
+
+        # Call OpenAI API with enhanced context
+        client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=800
+        )
+
+        # Parse response
+        response_content = response.choices[0].message.content
+        logger.info(f"OpenAI response content: {response_content}")
+
+        # Remove markdown code block formatting if present
+        clean_content = response_content.strip()
+        if clean_content.startswith('```json'):
+            clean_content = clean_content[7:]  # Remove ```json
+        if clean_content.startswith('```'):
+            clean_content = clean_content[3:]   # Remove ```
+        if clean_content.endswith('```'):
+            clean_content = clean_content[:-3]  # Remove closing ```
+        clean_content = clean_content.strip()
+
+        try:
+            ai_response = json.loads(clean_content)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse OpenAI response as JSON: {e}")
+            logger.error(f"Raw response content: {repr(response_content)}")
+            logger.error(f"Cleaned content: {repr(clean_content)}")
+            # Fallback to rule-based if JSON parsing fails
+            return generate_rule_based_explanation(drug_a, drug_b, 0.5)
+
+        return {
+            'severity': ai_response.get('severity', 'mild'),
+            'description': ai_response.get('description', 'Enhanced AI-generated interaction assessment'),
+            'recommendation': ai_response.get('recommendation', 'Monitor as appropriate'),
+            'riskFactors': ai_response.get('riskFactors', []),
+            'monitoringAdvice': ai_response.get('monitoringAdvice', 'Standard monitoring'),
+            'patientSpecificConcerns': ai_response.get('patientSpecificConcerns', 'No specific concerns identified'),
+            'sources': ['OpenAI GPT-4 Enhanced Analysis'],
+            'confidence': 0.85,
+            'method': 'enhanced_ai_rag'
+        }
+
+    except Exception as e:
+        logger.error(f"Error with enhanced OpenAI API: {e}")
+        return generate_rule_based_explanation(drug_a, drug_b, 0.5)
 
 def generate_rule_based_explanation(drug_a: str, drug_b: str, similarity_score: float) -> Dict:
     """Generate explanation using rule-based logic"""
@@ -338,6 +468,40 @@ async def check_interaction(request: InteractionRequest):
 
     except Exception as e:
         logger.error(f"Error processing interaction check: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.post("/interactions/check-enhanced", response_model=InteractionResponse)
+async def check_interaction_enhanced(request: EnhancedInteractionRequest):
+    """Enhanced endpoint for checking drug interactions with patient context"""
+    try:
+        drug_a = request.drugA.strip()
+        drug_b = request.drugB.strip()
+        patient_context = request.patientContext
+
+        logger.info(f"Enhanced interaction check: {drug_a} + {drug_b} (Patient: age {patient_context.get('age', 'unknown')})")
+
+        # Step 1: Check static interaction database first
+        static_interaction = find_static_interaction(drug_a, drug_b)
+        if static_interaction:
+            # Even with static data, enhance with patient context via AI
+            explanation = generate_enhanced_ai_explanation(drug_a, drug_b, patient_context)
+            # Merge static data with enhanced analysis
+            return InteractionResponse(
+                severity=max(static_interaction['severity'], explanation.get('severity', 'mild'), key=lambda x: {'mild': 1, 'moderate': 2, 'severe': 3}[x]),
+                description=f"{static_interaction['description']} {explanation.get('description', '')}",
+                recommendation=explanation.get('recommendation', static_interaction['recommendation']),
+                sources=['Static Database', 'Enhanced AI Analysis'],
+                confidence=0.90,
+                method='static_enhanced'
+            )
+
+        # Step 2: Use enhanced AI analysis for unknown combinations
+        explanation = generate_enhanced_ai_explanation(drug_a, drug_b, patient_context)
+
+        return InteractionResponse(**explanation)
+
+    except Exception as e:
+        logger.error(f"Error processing enhanced interaction check: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/drugs")
