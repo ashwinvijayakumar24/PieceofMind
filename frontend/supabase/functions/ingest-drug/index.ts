@@ -1,11 +1,15 @@
-// ingest-drug/index.ts
-import { serve } from "std/http/server";
+import { serve } from "std/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
+
+interface Request {
+  method: string;
+  json(): Promise<any>;
+}
 
 const SUPABASE_URL = Deno.env.get('PROJECT_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY')!;
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')!; //add later
-const OPENFDA_API_KEY = Deno.env.get('OPENFDA_API_KEY') || ''; //add later
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')!;
+const OPENFDA_API_KEY = Deno.env.get('OPENFDA_API_KEY') || '';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
@@ -26,8 +30,14 @@ function chunkText(text: string, chunkSize = 1000, overlap = 200) {
 async function createEmbedding(text: string) {
   const res = await fetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_API_KEY}` },
-    body: JSON.stringify({ model: 'text-embedding-3-small', input: text })
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENAI_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: 'text-embedding-3-small',
+      input: text
+    })
   });
   if (!res.ok) {
     const txt = await res.text();
@@ -48,7 +58,7 @@ async function fetchOpenFdaLabels(drugName: string, limit = 5) {
   return j.results || null;
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method !== 'POST') return new Response('POST only', { status: 405 });
   const body = await req.json().catch(() => ({}));
   const drug = (body.drug || '').trim();
@@ -68,7 +78,6 @@ serve(async (req) => {
   }
 
   const sections = ['drug_interactions','warnings','precautions','contraindications','adverse_reactions','clinical_pharmacology','description','indications_and_usage'];
-
   const rows: any[] = [];
   for (const lab of labels) {
     const labelId = lab.setid || lab.spl_id || null;

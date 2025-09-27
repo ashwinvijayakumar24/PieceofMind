@@ -1,3 +1,75 @@
-.env
+# Python/ML
+ml/venv/
+ml/__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.nox/
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+cython_debug/
+lib/
+lib64/
+local/
+share/
+celerybeat-schedule
+*.sage.py
+
+# Deno/Supabase
+.deno/
+**/deno.lock
+backend/supabase/.temp/
+
+# Node.js/Frontend
 node_modules/
-venv/
+dist/
+.next/
+.nuxt/
+build/
+.cache/
+.env.local
+.env.*.local
+
+# Dependencies
+.pnp/
+.pnp.js
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment variables
+.env
+.env.development
+.env.test
+.env.production
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

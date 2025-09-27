@@ -1,0 +1,21 @@
+{
+  "tasks": {
+    "start": "deno run --allow-net --allow-env index.ts"
+  },
+  "compilerOptions": {
+    "allowJs": true,
+    "strict": true,
+    "lib": ["deno.window"],
+    "target": "ESNext"
+  },
+  "lint": {
+    "files": {
+      "include": ["index.ts"]
+    }
+  },
+  "fmt": {
+    "files": {
+      "include": ["index.ts"]
+    }
+  }
+}
