@@ -30,8 +30,8 @@ export interface Interaction {
   description: string;
   recommendation: string;
   sources: string[];
-  method: string;
   confidence?: number;
+  method: string;
 }
 
 export interface InteractionSummary {

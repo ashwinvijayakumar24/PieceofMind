@@ -17,14 +17,6 @@ const queryClient = new QueryClient({
 });
 
 const App = () => {
-  console.log('🔥 App component loading...');
-  console.log('🔥 App environment:', {
-    mode: import.meta.env.MODE,
-    dev: import.meta.env.DEV,
-    prod: import.meta.env.PROD,
-    baseUrl: import.meta.env.BASE_URL,
-  });
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -35,7 +27,6 @@ const App = () => {
             <Route path="/" element={<Login />} />
             <Route path="/login" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

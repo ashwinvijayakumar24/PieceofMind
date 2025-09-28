@@ -27,8 +27,8 @@ export interface Interaction {
   description: string;
   recommendation: string;
   sources: string[];
-  method: string;
   confidence?: number;
+  method: string;
 }
 
 export interface InteractionSummary {
@@ -206,6 +206,16 @@ class ApiService {
         drugName,
         rxcui,
       }),
+    });
+  }
+
+  // Remove drug from patient
+  async removeDrugFromPatient(
+    patientId: string,
+    drugName: string
+  ): Promise<{ patient: Patient; summary: any }> {
+    return this.request(`/api/patients/${patientId}/drugs/${encodeURIComponent(drugName)}`, {
+      method: 'DELETE',
     });
   }
 }

@@ -251,22 +251,39 @@ Respond in JSON format:
 
         # Remove markdown code block formatting if present
         clean_content = response_content.strip()
+
+        # More robust markdown removal
         if clean_content.startswith('```json'):
-            clean_content = clean_content[7:]  # Remove ```json
-        if clean_content.startswith('```'):
-            clean_content = clean_content[3:]   # Remove ```
+            clean_content = clean_content[7:]
+        elif clean_content.startswith('```'):
+            clean_content = clean_content[3:]
+
         if clean_content.endswith('```'):
-            clean_content = clean_content[:-3]  # Remove closing ```
+            clean_content = clean_content[:-3]
+
         clean_content = clean_content.strip()
 
-        ai_response = json.loads(clean_content)
+        # If still empty or doesn't look like JSON, fallback
+        if not clean_content or not clean_content.startswith('{'):
+            logger.error(f"Invalid cleaned content: {repr(clean_content)}")
+            return generate_rule_based_explanation(drug_a, drug_b, similarity_score)
+
+        try:
+            ai_response = json.loads(clean_content)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse OpenAI response as JSON: {e}")
+            logger.error(f"Raw response content: {repr(response_content)}")
+            logger.error(f"Cleaned content: {repr(clean_content)}")
+            # Fallback to rule-based if JSON parsing fails
+            return generate_rule_based_explanation(drug_a, drug_b, similarity_score)
+
         return {
             'severity': ai_response.get('severity', 'mild'),
             'description': ai_response.get('description', 'AI-generated interaction assessment'),
             'recommendation': ai_response.get('recommendation', 'Monitor as appropriate'),
             'sources': ['OpenAI GPT-4 Analysis'],
-            'confidence': min(0.8, similarity_score + 0.3),
-            'method': 'ai_rag'
+            'confidence': 0.8,
+            'method': 'AI Explanation'
         }
 
     except Exception as e:
@@ -353,13 +370,22 @@ Provide a detailed clinical assessment in JSON format:
 
         # Remove markdown code block formatting if present
         clean_content = response_content.strip()
+
+        # More robust markdown removal
         if clean_content.startswith('```json'):
-            clean_content = clean_content[7:]  # Remove ```json
-        if clean_content.startswith('```'):
-            clean_content = clean_content[3:]   # Remove ```
+            clean_content = clean_content[7:]
+        elif clean_content.startswith('```'):
+            clean_content = clean_content[3:]
+
         if clean_content.endswith('```'):
-            clean_content = clean_content[:-3]  # Remove closing ```
+            clean_content = clean_content[:-3]
+
         clean_content = clean_content.strip()
+
+        # If still empty or doesn't look like JSON, fallback
+        if not clean_content or not clean_content.startswith('{'):
+            logger.error(f"Invalid cleaned content: {repr(clean_content)}")
+            return generate_rule_based_explanation(drug_a, drug_b, 0.5)
 
         try:
             ai_response = json.loads(clean_content)
@@ -378,7 +404,7 @@ Provide a detailed clinical assessment in JSON format:
             'monitoringAdvice': ai_response.get('monitoringAdvice', 'Standard monitoring'),
             'patientSpecificConcerns': ai_response.get('patientSpecificConcerns', 'No specific concerns identified'),
             'sources': ['OpenAI GPT-4 Enhanced Analysis'],
-            'confidence': 0.85,
+            'confidence': 0.9,
             'method': 'enhanced_ai_rag'
         }
 
@@ -418,7 +444,7 @@ def generate_rule_based_explanation(drug_a: str, drug_b: str, similarity_score: 
         'description': description,
         'recommendation': recommendation,
         'sources': ['Rule-based analysis'],
-        'confidence': max(0.3, similarity_score),
+        'confidence': 0.6,
         'method': 'rule_based'
     }
 
@@ -446,17 +472,17 @@ async def check_interaction(request: InteractionRequest):
 
         logger.info(f"Checking interaction: {drug_a} + {drug_b}")
 
-        # Step 1: Check static interaction database
-        static_interaction = find_static_interaction(drug_a, drug_b)
-        if static_interaction:
-            return InteractionResponse(
-                severity=static_interaction['severity'],
-                description=static_interaction['description'],
-                recommendation=static_interaction['recommendation'],
-                sources=static_interaction.get('references', ['Static Database']),
-                confidence=0.95,
-                method='static_lookup'
-            )
+        # Step 1: Skip static interaction database - using AI analysis only
+        # static_interaction = find_static_interaction(drug_a, drug_b)
+        # if static_interaction:
+        #     return InteractionResponse(
+        #         severity=static_interaction['severity'],
+        #         description=static_interaction['description'],
+        #         recommendation=static_interaction['recommendation'],
+        #         sources=static_interaction.get('references', ['Static Database']),
+        #         confidence=1.0,
+        #         method='static_database'
+        #     )
 
         # Step 2: Calculate similarity and generate explanation
         similarity_score, similarity_status = calculate_similarity_score(drug_a, drug_b)
@@ -480,20 +506,20 @@ async def check_interaction_enhanced(request: EnhancedInteractionRequest):
 
         logger.info(f"Enhanced interaction check: {drug_a} + {drug_b} (Patient: age {patient_context.get('age', 'unknown')})")
 
-        # Step 1: Check static interaction database first
-        static_interaction = find_static_interaction(drug_a, drug_b)
-        if static_interaction:
-            # Even with static data, enhance with patient context via AI
-            explanation = generate_enhanced_ai_explanation(drug_a, drug_b, patient_context)
-            # Merge static data with enhanced analysis
-            return InteractionResponse(
-                severity=max(static_interaction['severity'], explanation.get('severity', 'mild'), key=lambda x: {'mild': 1, 'moderate': 2, 'severe': 3}[x]),
-                description=f"{static_interaction['description']} {explanation.get('description', '')}",
-                recommendation=explanation.get('recommendation', static_interaction['recommendation']),
-                sources=['Static Database', 'Enhanced AI Analysis'],
-                confidence=0.90,
-                method='static_enhanced'
-            )
+        # Step 1: Skip static interaction database - using enhanced AI analysis only
+        # static_interaction = find_static_interaction(drug_a, drug_b)
+        # if static_interaction:
+        #     # Even with static data, enhance with patient context via AI
+        #     explanation = generate_enhanced_ai_explanation(drug_a, drug_b, patient_context)
+        #     # Merge static data with enhanced analysis
+        #     return InteractionResponse(
+        #         severity=max(static_interaction['severity'], explanation.get('severity', 'mild'), key=lambda x: {'mild': 1, 'moderate': 2, 'severe': 3}[x]),
+        #         description=f"{static_interaction['description']} {explanation.get('description', '')}",
+        #         recommendation=explanation.get('recommendation', static_interaction['recommendation']),
+        #         sources=['Static Database', 'Enhanced AI Analysis'],
+        #         confidence=0.95,
+        #         method='static_enhanced_ai'
+        #     )
 
         # Step 2: Use enhanced AI analysis for unknown combinations
         explanation = generate_enhanced_ai_explanation(drug_a, drug_b, patient_context)

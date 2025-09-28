@@ -2,148 +2,95 @@
   "drugs": [
     {
       "name": "Warfarin",
-      "generic_name": "warfarin",
       "drug_class": "Anticoagulant",
       "mechanism": "Vitamin K antagonist",
-      "common_uses": "Prevention of blood clots in atrial fibrillation, deep vein thrombosis, pulmonary embolism",
-      "side_effects": ["bleeding", "bruising", "hair loss", "skin necrosis"],
-      "warnings": ["Monitor INR levels", "Avoid vitamin K rich foods", "Risk of bleeding"],
-      "interactions_profile": "High risk with antiplatelet agents, NSAIDs, and drugs affecting CYP2C9"
+      "common_uses": "Prevention of blood clots",
+      "interactions_profile": "High bleeding risk with NSAIDs and antiplatelet agents"
     },
     {
-      "name": "Atorvastatin",
-      "generic_name": "atorvastatin",
-      "drug_class": "HMG-CoA reductase inhibitor",
-      "mechanism": "Inhibits cholesterol synthesis",
-      "common_uses": "Hypercholesterolemia, cardiovascular disease prevention",
-      "side_effects": ["muscle pain", "elevated liver enzymes", "headache", "nausea"],
-      "warnings": ["Monitor liver function", "Risk of rhabdomyolysis", "Avoid grapefruit"],
-      "interactions_profile": "CYP3A4 substrate, interactions with macrolides, azole antifungals"
-    },
-    {
-      "name": "Lisinopril",
-      "generic_name": "lisinopril",
-      "drug_class": "ACE inhibitor",
-      "mechanism": "Inhibits angiotensin-converting enzyme",
-      "common_uses": "Hypertension, heart failure, post-myocardial infarction",
-      "side_effects": ["dry cough", "hyperkalemia", "angioedema", "dizziness"],
-      "warnings": ["Monitor kidney function", "Risk of angioedema", "Avoid in pregnancy"],
-      "interactions_profile": "Potassium-sparing effects, interactions with NSAIDs, lithium"
-    },
-    {
-      "name": "Metformin",
-      "generic_name": "metformin",
-      "drug_class": "Biguanide",
-      "mechanism": "Decreases hepatic glucose production",
-      "common_uses": "Type 2 diabetes mellitus, insulin resistance",
-      "side_effects": ["nausea", "diarrhea", "metallic taste", "vitamin B12 deficiency"],
-      "warnings": ["Risk of lactic acidosis", "Monitor kidney function", "Contrast media interaction"],
-      "interactions_profile": "Low interaction potential, mainly renal elimination"
+      "name": "Aspirin",
+      "drug_class": "NSAID/Antiplatelet",
+      "mechanism": "COX inhibitor",
+      "common_uses": "Pain relief and antiplatelet therapy",
+      "interactions_profile": "Increases bleeding risk with anticoagulants"
     },
     {
       "name": "Ibuprofen",
-      "generic_name": "ibuprofen",
       "drug_class": "NSAID",
-      "mechanism": "COX-1 and COX-2 inhibitor",
-      "common_uses": "Pain relief, inflammation, fever reduction",
-      "side_effects": ["GI upset", "increased bleeding risk", "kidney damage", "hypertension"],
-      "warnings": ["GI bleeding risk", "Cardiovascular risk", "Kidney function monitoring"],
-      "interactions_profile": "High interaction potential with anticoagulants, ACE inhibitors, diuretics"
+      "mechanism": "COX inhibitor",
+      "common_uses": "Pain and inflammation relief",
+      "interactions_profile": "Bleeding risk with anticoagulants"
     },
     {
-      "name": "Fluoxetine",
-      "generic_name": "fluoxetine",
-      "drug_class": "SSRI",
-      "mechanism": "Selective serotonin reuptake inhibitor",
-      "common_uses": "Depression, anxiety disorders, OCD, bulimia nervosa",
-      "side_effects": ["nausea", "insomnia", "sexual dysfunction", "weight changes"],
-      "warnings": ["Suicide risk monitoring", "Serotonin syndrome", "Withdrawal effects"],
-      "interactions_profile": "CYP2D6 inhibitor, serotonergic interactions, bleeding risk with anticoagulants"
+      "name": "Acetaminophen",
+      "drug_class": "Analgesic",
+      "mechanism": "Unknown analgesic mechanism",
+      "common_uses": "Pain and fever relief",
+      "interactions_profile": "Generally safe with most medications"
+    },
+    {
+      "name": "Metformin",
+      "drug_class": "Antidiabetic",
+      "mechanism": "Glucose metabolism modulator",
+      "common_uses": "Type 2 diabetes management",
+      "interactions_profile": "Monitor with contrast agents"
+    },
+    {
+      "name": "Atorvastatin",
+      "drug_class": "Statin",
+      "mechanism": "HMG-CoA reductase inhibitor",
+      "common_uses": "Cholesterol management",
+      "interactions_profile": "Muscle toxicity with certain drugs"
     }
   ],
   "interactions": [
     {
-      "drug_a": "Warfarin",
-      "drug_b": "Ibuprofen",
+      "drug_a": "warfarin",
+      "drug_b": "aspirin",
       "severity": "severe",
-      "mechanism": "Additive anticoagulant effects and platelet inhibition",
-      "description": "Concurrent use significantly increases bleeding risk due to warfarin's anticoagulant effects and ibuprofen's antiplatelet activity and GI irritation.",
-      "clinical_evidence": "Multiple case reports and studies demonstrate 2-3 fold increase in bleeding risk",
-      "recommendation": "Avoid combination. Use acetaminophen for pain relief instead.",
-      "monitoring": "If unavoidable, monitor INR daily and watch for bleeding signs",
-      "references": ["PMID: 12345678", "FDA Drug Label Warnings"]
+      "description": "Increased bleeding risk due to combined anticoagulant and antiplatelet effects",
+      "mechanism": "Additive bleeding effects",
+      "recommendation": "Monitor INR closely, consider alternative analgesics"
     },
     {
-      "drug_a": "Warfarin",
-      "drug_b": "Atorvastatin",
+      "drug_a": "warfarin",
+      "drug_b": "ibuprofen",
+      "severity": "severe",
+      "description": "Significant bleeding risk with NSAID and anticoagulant combination",
+      "mechanism": "Enhanced anticoagulation",
+      "recommendation": "Avoid combination if possible, use acetaminophen instead"
+    },
+    {
+      "drug_a": "aspirin",
+      "drug_b": "ibuprofen",
       "severity": "moderate",
-      "mechanism": "CYP2C9 enzyme competition and protein binding displacement",
-      "description": "Atorvastatin may enhance warfarin's anticoagulant effect through hepatic enzyme interactions.",
-      "clinical_evidence": "Small studies show modest INR increases in some patients",
-      "recommendation": "Monitor INR more frequently when starting/stopping atorvastatin",
-      "monitoring": "Check INR within 1-2 weeks of dose changes",
-      "references": ["PMID: 87654321"]
+      "description": "Increased GI bleeding risk with dual NSAID therapy",
+      "mechanism": "Additive GI toxicity",
+      "recommendation": "Use lowest effective doses, consider gastroprotection"
     },
     {
-      "drug_a": "Lisinopril",
-      "drug_b": "Ibuprofen",
-      "severity": "moderate",
-      "mechanism": "Prostaglandin-mediated effects on kidney function",
-      "description": "NSAIDs reduce prostaglandin synthesis, potentially decreasing ACE inhibitor effectiveness and worsening kidney function.",
-      "clinical_evidence": "Studies show reduced antihypertensive effect and increased serum creatinine",
-      "recommendation": "Monitor blood pressure and kidney function closely",
-      "monitoring": "Check serum creatinine and potassium within 1 week",
-      "references": ["PMID: 11223344"]
-    },
-    {
-      "drug_a": "Fluoxetine",
-      "drug_b": "Ibuprofen",
-      "severity": "moderate",
-      "mechanism": "Additive effects on platelet function and bleeding risk",
-      "description": "SSRIs affect platelet serotonin, and combined with NSAID's antiplatelet effects, increase bleeding risk.",
-      "clinical_evidence": "Epidemiological studies show increased GI and other bleeding events",
-      "recommendation": "Consider gastroprotective therapy and monitor for bleeding",
-      "monitoring": "Watch for signs of bleeding, especially GI symptoms",
-      "references": ["PMID: 55667788"]
-    },
-    {
-      "drug_a": "Lisinopril",
-      "drug_b": "Metformin",
+      "drug_a": "metformin",
+      "drug_b": "acetaminophen",
       "severity": "mild",
-      "mechanism": "Potential additive effects on kidney function",
-      "description": "Both drugs are eliminated by kidneys; ACE inhibitors may slightly affect kidney function.",
-      "clinical_evidence": "Generally safe combination with minimal interaction risk",
-      "recommendation": "Routine monitoring of kidney function as with individual drugs",
-      "monitoring": "Standard monitoring for both medications",
-      "references": ["Clinical guidelines"]
+      "description": "No significant interaction between these medications",
+      "mechanism": "Different metabolic pathways",
+      "recommendation": "Continue monitoring as usual"
     },
     {
-      "drug_a": "Atorvastatin",
-      "drug_b": "Fluoxetine",
+      "drug_a": "atorvastatin",
+      "drug_b": "acetaminophen",
       "severity": "mild",
-      "mechanism": "Minimal pharmacokinetic interaction via CYP enzymes",
-      "description": "Low risk interaction between statin and SSRI with different primary metabolism pathways.",
-      "clinical_evidence": "No significant clinical interactions reported in literature",
-      "recommendation": "Continue both medications with routine monitoring",
-      "monitoring": "Standard monitoring for liver function (statin) and mood (SSRI)",
-      "references": ["Drug interaction databases"]
-    }
-  ],
-  "severity_definitions": {
-    "severe": {
-      "description": "Life-threatening interaction requiring immediate intervention",
-      "action": "Avoid combination or use extreme caution with intensive monitoring",
-      "color": "#DC2626"
+      "description": "No clinically significant interaction",
+      "mechanism": "Different metabolic pathways",
+      "recommendation": "Safe to use together"
     },
-    "moderate": {
-      "description": "Significant interaction requiring monitoring and possible dose adjustment",
-      "action": "Monitor closely and adjust therapy as needed",
-      "color": "#F59E0B"
-    },
-    "mild": {
-      "description": "Minor interaction with minimal clinical significance",
-      "action": "Continue with routine monitoring",
-      "color": "#10B981"
+    {
+      "drug_a": "warfarin",
+      "drug_b": "acetaminophen",
+      "severity": "mild",
+      "description": "Minimal interaction, safe for short-term use",
+      "mechanism": "Limited interference with coagulation",
+      "recommendation": "Safe alternative for pain relief"
     }
-  }
+  ]
 }

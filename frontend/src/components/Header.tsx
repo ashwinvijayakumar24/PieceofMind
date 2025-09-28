@@ -7,15 +7,15 @@ export const Header = () => {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="p-2 bg-primary rounded-lg">
-              <Stethoscope className="h-6 w-6 text-primary-foreground" />
+            <div className="rounded-lg">
+              <img src="/clearRx.png" alt="Logo" className="h-24 w-24" />
             </div>
             <div>
               <h1 className="text-xl font-semibold text-foreground">
-                Drug-Drug Interaction Assistant
+                clearRx
               </h1>
               <p className="text-sm text-muted-foreground">
-                Clinical Decision Support Tool
+                Drug-Drug Interaction Assistant
               </p>
             </div>
           </div>
@@ -23,7 +23,7 @@ export const Header = () => {
           <div className="flex items-center space-x-2">
             <Button variant="ghost" size="sm" className="flex items-center space-x-2">
               <User className="h-4 w-4" />
-              <span>Dr. Smith</span>
+              <span>Dr. Ashwin Vijayakumar</span>
             </Button>
           </div>
         </div>

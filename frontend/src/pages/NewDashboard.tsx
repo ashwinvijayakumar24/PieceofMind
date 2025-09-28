@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle, Info, Loader2, Plus, Search } from "lucide-react";
+import { AlertCircle, CheckCircle, Info, Loader2, Plus, Search, X } from "lucide-react";
 import { Patient, Interaction, InteractionSummary } from "@/types";
 import { apiService } from "@/services/api";
 import { Header } from "@/components/Header";
@@ -13,6 +13,12 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
+// Minimal Health type used by the health check query
+type Health = {
+  status: string;
+  services: Record<string, boolean>;
+};
+
 const Dashboard = () => {
   console.log('🎯 Dashboard component rendering...');
   console.log('🎯 Current window location:', window.location.href);
@@ -21,6 +27,7 @@ const Dashboard = () => {
     VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
     VITE_ML_BASE_URL: import.meta.env.VITE_ML_BASE_URL,
   });
+
 
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [isCheckingInteractions, setIsCheckingInteractions] = useState(false);
@@ -88,6 +95,18 @@ const Dashboard = () => {
     }
   });
 
+  // Log health to console (instead of showing UI alert). Typed to avoid TS errors.
+  useEffect(() => {
+    if (healthData) {
+      const hd = healthData as Health;
+      console.log('🩺 Health status (logged):', {
+        status: hd.status,
+        mlService: !!hd.services?.sentence_transformers,
+        openai: !!hd.services?.openai,
+      });
+    }
+  }, [healthData]);
+
   // Check interactions mutation
   const checkInteractionsMutation = useMutation({
     mutationFn: ({ medications, patientId }: { medications: string[]; patientId?: string }) =>
@@ -105,7 +124,8 @@ const Dashboard = () => {
   });
 
   const handlePatientSelect = (patientId: string) => {
-    const patient = patientsData?.patients.find(p => p.id === patientId);
+    const patientsList = (patientsData as { patients: Patient[] } | undefined)?.patients;
+    const patient = patientsList?.find(p => p.id === patientId);
     setSelectedPatient(patient || null);
     setInteractionResults(null); // Clear previous results
     setAddDrugResults(null); // Clear drug addition results
@@ -147,7 +167,8 @@ const Dashboard = () => {
       setSelectedPatient(result.patient);
 
       // Refresh patients data
-      queryClient.invalidateQueries(['patients']);
+  // Refresh patients data
+  queryClient.invalidateQueries({ queryKey: ['patients'] });
 
       toast.success(`${drugName} added successfully`);
 
@@ -160,6 +181,32 @@ const Dashboard = () => {
       toast.error('Failed to add drug to patient');
     } finally {
       setIsAddingDrug(false);
+    }
+  };
+
+  const handleRemoveDrug = async (drugName: string) => {
+    if (!selectedPatient) {
+      toast.error('Please select a patient first');
+      return;
+    }
+
+    try {
+      const result = await apiService.removeDrugFromPatient(selectedPatient.id, drugName);
+
+      // Update the selected patient with removed medication
+      setSelectedPatient(result.patient);
+
+      // Refresh patients data
+      queryClient.invalidateQueries({ queryKey: ['patients'] });
+
+      // Clear any previous results
+      setAddDrugResults(null);
+      setInteractionResults(null);
+
+      toast.success(`${drugName} removed successfully`);
+    } catch (error) {
+      console.error('Error removing drug:', error);
+      toast.error('Failed to remove medication');
     }
   };
 
@@ -234,17 +281,7 @@ const Dashboard = () => {
       <Header />
 
       <div className="container mx-auto px-4 py-8">
-        {/* Service Status */}
-        {healthData && (
-          <Alert className="mb-6">
-            <Info className="h-4 w-4" />
-            <AlertDescription>
-              System Status: {healthData.status} |
-              ML Service: {healthData.services.sentence_transformers ? '✅' : '❌'} |
-              OpenAI: {healthData.services.openai ? '✅' : '❌'}
-            </AlertDescription>
-          </Alert>
-        )}
+        {/* Service Status: logged to console instead of shown in UI */}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Patient Selection */}
@@ -267,7 +304,7 @@ const Dashboard = () => {
                       <SelectValue placeholder="Select a patient" />
                     </SelectTrigger>
                     <SelectContent>
-                      {patientsData?.patients.map((patient) => (
+                      {((patientsData as { patients: Patient[] } | undefined)?.patients || []).map((patient) => (
                         <SelectItem key={patient.id} value={patient.id}>
                           {patient.name} ({patient.age}y, {patient.gender})
                         </SelectItem>
@@ -303,8 +340,16 @@ const Dashboard = () => {
                       <h4 className="font-medium">Current Medications</h4>
                       <div className="space-y-2 mt-2">
                         {selectedPatient.medications.map((medication, index) => (
-                          <div key={index} className="flex items-center gap-2">
+                          <div key={index} className="flex items-center justify-between gap-2">
                             <Badge variant="secondary">{medication}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveDrug(medication)}
+                              className="h-6 w-6 p-0 hover:bg-red-100 hover:text-red-600"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
                           </div>
                         ))}
                       </div>
@@ -466,6 +511,12 @@ const Dashboard = () => {
                                   <strong>Recommendation:</strong> {interaction.recommendation}
                                 </div>
 
+                                {interaction.confidence && (
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    <strong>Confidence:</strong> {(interaction.confidence * 100).toFixed(1)}%
+                                  </div>
+                                )}
+
                                 {interaction.riskFactors && interaction.riskFactors.length > 0 && (
                                   <div className="text-xs text-gray-600 mt-2">
                                     <strong>Risk Factors:</strong> {interaction.riskFactors.join(', ')}
@@ -478,11 +529,6 @@ const Dashboard = () => {
                                   </div>
                                 )}
 
-                                {interaction.confidence && (
-                                  <div className="text-xs text-gray-600 mt-1">
-                                    <strong>Confidence:</strong> {(interaction.confidence * 100).toFixed(1)}%
-                                  </div>
-                                )}
                               </div>
                             </div>
                           </div>
@@ -568,7 +614,7 @@ const Dashboard = () => {
                                   {interaction.severity.toUpperCase()}
                                 </Badge>
                                 <Badge variant="outline" className="text-xs">
-                                  {interaction.method}
+                                  {interaction.method || 'enhanced_ai'}
                                 </Badge>
                               </div>
 
@@ -578,17 +624,18 @@ const Dashboard = () => {
                                 <strong>Recommendation:</strong> {interaction.recommendation}
                               </div>
 
+                              {interaction.confidence && (
+                                <div className="text-xs text-gray-600 mt-1">
+                                  <strong>Confidence:</strong> {(interaction.confidence * 100).toFixed(1)}%
+                                </div>
+                              )}
+
                               {interaction.sources.length > 0 && (
                                 <div className="text-xs text-gray-600 mt-2">
                                   <strong>Sources:</strong> {interaction.sources.join(', ')}
                                 </div>
                               )}
 
-                              {interaction.confidence && (
-                                <div className="text-xs text-gray-600 mt-1">
-                                  <strong>Confidence:</strong> {(interaction.confidence * 100).toFixed(1)}%
-                                </div>
-                              )}
                             </div>
                           </div>
                         </div>

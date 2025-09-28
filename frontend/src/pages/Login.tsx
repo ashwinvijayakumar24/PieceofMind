@@ -22,13 +22,13 @@ const Login = () => {
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="p-3 bg-primary rounded-full">
-              <Stethoscope className="h-6 w-6 text-primary-foreground" />
+            <div className="rounded-lg">
+              <img src="/clearRx.png" alt="Logo" className="h-24 w-24" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-semibold">Drug-Drug Interaction Assistant</CardTitle>
+          <CardTitle className="text-2xl font-semibold">clearRX</CardTitle>
           <CardDescription>
-            Sign in to access the clinical decision support tool
+            Sign in to access the drug-drug interaction assistant
           </CardDescription>
         </CardHeader>
         <CardContent>

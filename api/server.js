@@ -1,4 +1,3 @@
-// Enhanced Express API for Drug-Drug Interaction Assistant
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -11,7 +10,7 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
+
 app.use(helmet());
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:8080',
@@ -19,13 +18,11 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 
-// Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Validation schemas
 const checkInteractionsSchema = Joi.object({
   medications: Joi.array().items(Joi.string()).min(2).required(),
   patientId: Joi.string().uuid().optional()
@@ -326,6 +323,67 @@ app.post('/api/patients/:id/drugs', async (req, res) => {
   }
 });
 
+// Remove drug from patient
+app.delete('/api/patients/:id/drugs/:drugName', async (req, res) => {
+  try {
+    const { id: patientId, drugName } = req.params;
+
+    if (!drugName) {
+      return res.status(400).json({ error: 'Drug name is required' });
+    }
+
+    // Get current patient data
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('*')
+      .eq('id', patientId)
+      .single();
+
+    if (patientError || !patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    // Check if drug exists in patient's medications
+    const currentMedications = patient.medications || [];
+    const decodedDrugName = decodeURIComponent(drugName);
+
+    if (!currentMedications.includes(decodedDrugName)) {
+      return res.status(404).json({ error: 'Drug not found in patient medications' });
+    }
+
+    // Remove drug from medications array
+    const updatedMedications = currentMedications.filter(med => med !== decodedDrugName);
+
+    // Update patient in database
+    const { data: updatedPatient, error: updateError } = await supabase
+      .from('patients')
+      .update({
+        medications: updatedMedications,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', patientId)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    res.json({
+      patient: updatedPatient,
+      summary: {
+        removedDrug: decodedDrugName,
+        removedSuccessfully: true,
+        remainingMedications: updatedMedications.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error removing drug from patient:', error);
+    res.status(500).json({ error: 'Failed to remove drug from patient' });
+  }
+});
+
 // Main interaction checking endpoint
 app.post('/api/check-interactions', async (req, res) => {
   try {
@@ -450,51 +508,6 @@ app.get('/api/patients/:id/interactions', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch interaction history' });
   }
 });
-
-// Fallback interaction logic for when ML service is unavailable
-function getFallbackInteraction(drugA, drugB) {
-  const knownInteractions = {
-    'warfarin-ibuprofen': {
-      severity: 'severe',
-      description: 'Increased bleeding risk when combining anticoagulants with NSAIDs',
-      recommendation: 'Avoid combination. Consider alternative pain management.'
-    },
-    'warfarin-atorvastatin': {
-      severity: 'moderate',
-      description: 'Atorvastatin may enhance anticoagulant effects of warfarin',
-      recommendation: 'Monitor INR more frequently when starting or stopping atorvastatin'
-    },
-    'lisinopril-ibuprofen': {
-      severity: 'moderate',
-      description: 'NSAIDs may reduce the antihypertensive effect of ACE inhibitors',
-      recommendation: 'Monitor blood pressure and kidney function closely'
-    },
-    'fluoxetine-ibuprofen': {
-      severity: 'moderate',
-      description: 'Increased risk of bleeding when combining SSRIs with NSAIDs',
-      recommendation: 'Consider gastroprotective therapy and monitor for bleeding'
-    }
-  };
-
-  // Normalize drug names and create lookup key
-  const normalizedA = drugA.toLowerCase().trim();
-  const normalizedB = drugB.toLowerCase().trim();
-  const key1 = `${normalizedA}-${normalizedB}`;
-  const key2 = `${normalizedB}-${normalizedA}`;
-
-  const interaction = knownInteractions[key1] || knownInteractions[key2];
-
-  if (interaction) {
-    return interaction;
-  }
-
-  // Default for unknown combinations
-  return {
-    severity: 'mild',
-    description: 'No significant interaction found in current database',
-    recommendation: 'Continue current medications with routine monitoring'
-  };
-}
 
 // Error handling middleware
 app.use((error, req, res, next) => {
