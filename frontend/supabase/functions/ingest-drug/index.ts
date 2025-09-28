@@ -6,8 +6,10 @@ interface Request {
   json(): Promise<any>;
 }
 
-const SUPABASE_URL = Deno.env.get('PROJECT_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY')!;
+// Hardcoded URL since this is the project's URL and is public anyway
+const SUPABASE_URL = "https://phlhdwhzxrxovznjodtp.supabase.co";
+// These should be set in Supabase's Edge Function secrets
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')!;
 const OPENFDA_API_KEY = Deno.env.get('OPENFDA_API_KEY') || '';
 
@@ -47,6 +49,8 @@ async function createEmbedding(text: string) {
   return j.data[0].embedding as number[];
 }
 
+//BE READY TO CHANGE THIS URI IF API CHANGES
+// *****************************************
 async function fetchOpenFdaLabels(drugName: string, limit = 5) {
   const q = `openfda.generic_name:"${drugName}"+OR+openfda.brand_name:"${drugName}"+OR+openfda.substance_name:"${drugName}"`;
   const url = `https://api.fda.gov/drug/label.json?search=${encodeURIComponent(q)}&limit=${limit}`;
